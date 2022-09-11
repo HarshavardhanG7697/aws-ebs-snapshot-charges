@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "aws-ebs-snapshot-charges"
+version = "0.1.0"
+description = "The EBS snapshot charges are difficult to be calculated. Hence, creating a python project to find and calculate the charges incurred by a snapshot using EBS direct APIs."
+authors = ["HarshavardhanG7697 <harsha7697@gmail.com>"]
+license = "Apache 2.0"
+readme = "README.md"
+packages = [{include = "aws_ebs_snapshot_charges"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
