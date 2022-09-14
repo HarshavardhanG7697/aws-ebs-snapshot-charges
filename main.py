@@ -1,11 +1,12 @@
 from asyncio.log import logger
+from pydoc import cli
 import boto3
 import logging
 import datetime
 from dateutil.tz import tzlocal
 
 logging.basicConfig(
-    level=logging.INFO, format="pid=%(process)d[%(levelname)s]:%(message)s"
+    level=logging.INFO, format="%(asctime)s[%(funcName)s][%(levelname)s]:%(message)s"
 )
 
 
@@ -40,6 +41,10 @@ def get_snapshot_name(snapshot):
         if tag["Key"] == "Name":
             logger.info(f"Name Tag present for snapshot: {snapshot['SnapshotId']}")
             return tag["Value"]
+        else:
+            logger.warning(
+                    f"{snapshot['SnapshotId']} does not have a Name tag.\nBut it has the following tags: {snapshot['Tags']}"
+                )
     return None
 
 
@@ -55,27 +60,55 @@ def time_since_snapshot(snapshot):
         logger.error(f"Error while calculating age of snapshot: {snapshot['SnapshotId']}")
         logger.error(e)
         return None
-    
 
-volumes = ["vol-029cbf276b7f62071", "vol-099624baeb6ddac32"]
-logger.info(f"Looking for snapshots of volumes: {volumes}")
-for volume in volumes:
-    snapshots = get_ebs_snapshots(volume)
-    if not snapshots:
-        logger.warning(f"There are no snapshots found for volume: {volume}")
-    else:
-        for snapshot in snapshots:
-            snapshot_id = get_snapshot_id(snapshot)
-            logger.info(f"Snapshot id: {snapshot_id}")
-            snapshot_name = get_snapshot_name(snapshot)
-            if snapshot_name:
-                logger.info(f"Snapshot name: {snapshot_name}")
-            else:
-                logger.warning(
-                    f"{snapshot['SnapshotId']} does not have a Name tag.\nBut it has the following tags: {snapshot['Tags']}"
-                )
-            snapshot_age = time_since_snapshot(snapshot)
-            if not snapshot_age:
-                logger.warning(f"Unable to calculate the age of snapshot: {snapshot['SnapshotId']}")
-            else:
-                logger.info(f"Age of {snapshot_id}: {snapshot_age} hours")
+def snapshot_changed_blocks(snapshot1, snapshot2):
+    logger.info(f"Calculating changed blocks between {snapshot1} and {snapshot2}")
+    client = boto3.client("ebs", region_name="ap-south-1")
+    num_blocks = 0
+    response = client.list_changed_blocks(FirstSnapshotId=snapshot1, SecondSnapshotId=snapshot2)
+    block_size_kb = response.get('BlockSize', 0) / 1024
+    while True:
+        num_blocks += len(response.get('ChangedBlocks', []))
+        logger.info(f"Number of changed blocks: {num_blocks}")
+        token = response.get('NextToken', '')
+        if token == '':
+            logger.warning(f"Next token is empty. Exiting loop.")
+            break
+        else:
+            logger.info(f"Next token: {token[:10]}")
+            response = client.list_changed_blocks(
+            NextToken=token,
+            FirstSnapshotId = snapshot1,
+            SecondSnapshotId = snapshot2,
+        )
+    return num_blocks * block_size_kb / (1024 * 1024)
+
+    
+def main():
+    pass
+
+if __name__ == "__main__":
+    main()
+
+# volumes = ["vol-029cbf276b7f62071", "vol-099624baeb6ddac32"]
+# logger.info(f"Looking for snapshots of volumes: {volumes}")
+# for volume in volumes:
+#     snapshots = get_ebs_snapshots(volume)
+#     if not snapshots:
+#         logger.warning(f"There are no snapshots found for volume: {volume}")
+#     else:
+#         for snapshot in snapshots:
+#             snapshot_id = get_snapshot_id(snapshot)
+#             logger.info(f"Snapshot id: {snapshot_id}")
+#             snapshot_name = get_snapshot_name(snapshot)
+#             if snapshot_name:
+#                 logger.info(f"Snapshot name: {snapshot_name}")
+#             else:
+#                 logger.warning(
+#                     f"{snapshot['SnapshotId']} does not have a Name tag.\nBut it has the following tags: {snapshot['Tags']}"
+#                 )
+#             snapshot_age = time_since_snapshot(snapshot)
+#             if not snapshot_age:
+#                 logger.warning(f"Unable to calculate the age of snapshot: {snapshot['SnapshotId']}")
+#             else:
+#                 logger.info(f"Age of {snapshot_id}: {snapshot_age} hours")
